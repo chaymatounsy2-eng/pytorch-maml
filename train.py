@@ -7,6 +7,7 @@ import logging
 
 from torchmeta.utils.data import BatchMetaDataLoader
 from torch.utils.data import DataLoader
+from torchmeta.utils import gradient_update_parameters
 
 from maml.datasets import get_benchmark_by_name
 from maml.metalearners import ModelAgnosticMetaLearning
@@ -14,18 +15,61 @@ from maml.metalearners import ModelAgnosticMetaLearning
 # Désactiver le debug logging de PIL
 logging.getLogger('PIL.TiffImagePlugin').setLevel(logging.WARNING)
 
+# ============================================================================
+# CLASSE EarlyStopping
+# ============================================================================
+class EarlyStopping:
+    """
+    Early stopping pour arrêter l'entraînement si la validation loss ne s'améliore pas
+    """
+    def __init__(self, patience=10, min_delta=0.0, verbose=True):
+        """
+        Args:
+            patience: Nombre d'epochs avant d'arrêter si pas d'amélioration
+            min_delta: Amélioration minimale considérée comme valide
+            verbose: Afficher les messages
+        """
+        self.patience = patience
+        self.min_delta = min_delta
+        self.verbose = verbose
+        self.counter = 0
+        self.best_loss = None
+        self.early_stop = False
+
+    def __call__(self, val_loss):
+        """
+        Vérifier si on doit arrêter
+        """
+        if self.best_loss is None:
+            self.best_loss = val_loss
+        elif val_loss < self.best_loss - self.min_delta:
+            # S'améliore suffisamment
+            self.best_loss = val_loss
+            self.counter = 0
+            if self.verbose:
+                print(f"✅ Amélioration détectée! Nouveau meilleur: {val_loss:.4f}")
+        else:
+            # Pas d'amélioration
+            self.counter += 1
+            if self.verbose:
+                print(f"⚠️  Pas d'amélioration ({self.counter}/{self.patience})")
+            
+            if self.counter >= self.patience:
+                self.early_stop = True
+                if self.verbose:
+                    print(f"🛑 EARLY STOPPING! Pas d'amélioration pendant {self.patience} epochs")
+
+
 def main(args):
     logging.basicConfig(level=logging.DEBUG if args.verbose else logging.INFO)
     device = torch.device('cuda' if args.use_cuda
                           and torch.cuda.is_available() else 'cpu')
-    
+
     print(f"\n{'='*80}")
     print(f"🚀 MAML TRAINING STARTED")
     print(f"{'='*80}")
     print(f"Dataset: {args.dataset}")
     print(f"Device: {device}")
-    print(f"Epochs: {args.num_epochs}")
-    print(f"Batches per epoch: {args.num_batches}")
     print(f"{'='*80}\n")
 
     if (args.output_folder is not None):
@@ -56,12 +100,12 @@ def main(args):
     print("✅ Benchmark loaded!\n")
 
     # =====================================================================
-    # MODIFICATION: DataLoader différent pour thermal
+    # THERMAL DATASET: Custom training loop
     # =====================================================================
     if args.dataset == 'thermal':
         print("🔥 THERMAL DATASET DETECTED - Using custom training loop\n")
         
-        # Pour dataset thermal, créer des dataloaders simples
+        # Create simple dataloaders
         print("📦 Creating train dataloader...")
         meta_train_dataloader = DataLoader(benchmark.meta_train_dataset,
                                            batch_size=args.batch_size,
@@ -76,7 +120,7 @@ def main(args):
         
         print("✅ DataLoaders created!\n")
         
-        # Créer metalearner pour thermal
+        # Create optimizer and metalearner
         print("⚙️  Creating optimizer and metalearner...")
         meta_optimizer = torch.optim.Adam(benchmark.model.parameters(), lr=args.meta_lr)
         metalearner = ModelAgnosticMetaLearning(benchmark.model,
@@ -88,10 +132,10 @@ def main(args):
                                                 device=device)
         print("✅ Metalearner created!\n")
         
-        # Import gradient update function
-        from torchmeta.utils import gradient_update_parameters
+        # Create EarlyStopping
+        early_stopping = EarlyStopping(patience=15, min_delta=0.001, verbose=True)
         
-        # ENTRAÎNEMENT THERMAL PERSONNALISÉ
+        # CUSTOM TRAINING LOOP FOR THERMAL
         best_value = None
         
         for epoch in range(args.num_epochs):
@@ -103,6 +147,7 @@ def main(args):
             print("🔵 TRAINING...")
             num_batches = 0
             total_loss = 0.0
+            total_accuracy = 0.0  # ✅ AJOUTER
             
             for batch_idx, batch in enumerate(meta_train_dataloader):
                 if num_batches >= args.num_batches:
@@ -110,23 +155,22 @@ def main(args):
                     break
                 
                 try:
-                    # Chaque batch contient une tâche MAML complète
+                    # Each batch contains one complete MAML task
                     train_x, train_y = batch['train']
                     test_x, test_y = batch['test']
                     
-                    # Reshaper pour MiniImagenet (3 canaux, 84x84)
-                                        # Reshaper pour MiniImagenet (3 canaux, 224x224) ← CHANGÉ!
-                    train_x = train_x.view(-1, 3, 224, 224).to(device)  # ← 224
+                    # Reshape to (N, 3, 84, 84)
+                    train_x = train_x.view(-1, 3, 84, 84).to(device)
                     train_y = train_y.view(-1).to(device)
-                    test_x = test_x.view(-1, 3, 224, 224).to(device)   # ← 224
+                    test_x = test_x.view(-1, 3, 84, 84).to(device)
                     test_y = test_y.view(-1).to(device)
                     
                     # ===== INNER LOOP: Adaptation =====
-                    # Forward sur support set
+                    # Forward on support set
                     logits_support = benchmark.model(train_x)
                     loss_support = benchmark.loss_function(logits_support, train_y)
                     
-                    # Adapter avec gradient_update_parameters
+                    # Adapt with gradient_update_parameters
                     params_adapted = gradient_update_parameters(
                         benchmark.model, 
                         loss_support,
@@ -135,11 +179,15 @@ def main(args):
                         first_order=args.first_order
                     )
                     
-                    # ===== OUTER LOOP: Évaluation =====
-                    # Évaluer sur query set avec poids adaptés
+                    # ===== OUTER LOOP: Evaluation =====
+                    # Evaluate on query set with adapted weights
                     with torch.set_grad_enabled(benchmark.model.training):
                         logits_query = benchmark.model(test_x, params=params_adapted)
                         loss_query = benchmark.loss_function(logits_query, test_y)
+                    
+                    # ✅ AJOUTER: Calculer accuracy
+                    preds = torch.argmax(logits_query, dim=1)
+                    accuracy = (preds == test_y).float().mean().item()
                     
                     # Meta-update
                     metalearner.optimizer.zero_grad()
@@ -147,10 +195,11 @@ def main(args):
                     metalearner.optimizer.step()
                     
                     total_loss += loss_query.item()
+                    total_accuracy += accuracy  # ✅ AJOUTER
                     num_batches += 1
                     
                     if (num_batches) % max(1, args.num_batches // 10) == 0:
-                        print(f"   Batch {num_batches}/{args.num_batches}: Loss={loss_query.item():.4f}")
+                        print(f"   Batch {num_batches}/{args.num_batches}: Loss={loss_query.item():.4f}, Acc={accuracy:.4f}")
                 
                 except Exception as e:
                     print(f"   ❌ ERROR in batch {batch_idx}: {e}")
@@ -159,68 +208,88 @@ def main(args):
                     continue
             
             avg_train_loss = total_loss / num_batches if num_batches > 0 else 0
-            print(f"✅ Train Loss: {avg_train_loss:.4f}")
+            avg_train_accuracy = total_accuracy / num_batches if num_batches > 0 else 0  # ✅ AJOUTER
+            print(f"✅ Train Loss: {avg_train_loss:.4f}, Train Acc: {avg_train_accuracy:.4f}")
             
             # ============= VALIDATION =============
             print("🟡 VALIDATING...")
             val_loss = 0.0
+            val_accuracy = 0.0  # ✅ AJOUTER
             val_count = 0
             
-            with torch.no_grad():
-                for batch in meta_val_dataloader:
-                    if val_count >= args.num_batches:
-                        print(f"   ✅ Max validation batches reached ({args.num_batches})")
-                        break
+            # ✅ CORRIGÉ: Enlever torch.no_grad() du wrapper principal
+            for batch in meta_val_dataloader:
+                if val_count >= args.num_batches:
+                    print(f"   ✅ Max validation batches reached ({args.num_batches})")
+                    break
+                
+                try:
+                    train_x, train_y = batch['train']
+                    test_x, test_y = batch['test']
                     
-                    try:
-                        train_x, train_y = batch['train']
-                        test_x, test_y = batch['test']
-                        
-                        train_x = train_x.view(-1, 3, 224, 224).to(device)  # ← 224
-                        train_y = train_y.view(-1).to(device)
-                        test_x = test_x.view(-1, 3, 224, 224).to(device)   # ← 224
-                        test_y = test_y.view(-1).to(device)
-                        
-                        # Adaptation
-                        logits_support = benchmark.model(train_x)
-                        loss_support = benchmark.loss_function(logits_support, train_y)
-                        
-                        params_adapted = gradient_update_parameters(
-                            benchmark.model, 
-                            loss_support,
-                            step_size=args.step_size, 
-                            params=None,
-                            first_order=True
-                        )
-                        
-                        # Évaluation
+                    train_x = train_x.view(-1, 3, 84, 84).to(device)
+                    train_y = train_y.view(-1).to(device)
+                    test_x = test_x.view(-1, 3, 84, 84).to(device)
+                    test_y = test_y.view(-1).to(device)
+                    
+                    # ===== INNER LOOP: Adaptation (AVEC gradients) =====
+                    logits_support = benchmark.model(train_x)
+                    loss_support = benchmark.loss_function(logits_support, train_y)
+                    
+                    params_adapted = gradient_update_parameters(
+                        benchmark.model, 
+                        loss_support,
+                        step_size=args.step_size, 
+                        params=None,
+                        first_order=True
+                    )
+                    
+                    # ===== OUTER LOOP: Evaluation (SANS gradients) =====
+                    with torch.no_grad():  # ✅ Seulement ici
                         logits_query = benchmark.model(test_x, params=params_adapted)
                         loss_query = benchmark.loss_function(logits_query, test_y)
                         
-                        val_loss += loss_query.item()
-                        val_count += 1
+                        # ✅ AJOUTER: Calculer accuracy
+                        preds = torch.argmax(logits_query, dim=1)
+                        accuracy = (preds == test_y).float().mean().item()
                     
-                    except Exception as e:
-                        print(f"   ❌ ERROR in validation batch: {e}")
-                        continue
+                    val_loss += loss_query.item()
+                    val_accuracy += accuracy  # ✅ AJOUTER
+                    val_count += 1
+                
+                except Exception as e:
+                    print(f"   ❌ ERROR in validation batch: {e}")
+                    import traceback
+                    traceback.print_exc()
+                    continue
             
             avg_val_loss = val_loss / val_count if val_count > 0 else 0
-            print(f"✅ Val Loss: {avg_val_loss:.4f}")
+            avg_val_accuracy = val_accuracy / val_count if val_count > 0 else 0  # ✅ AJOUTER
+            print(f"✅ Val Loss: {avg_val_loss:.4f}, Val Acc: {avg_val_accuracy:.4f}")  # ✅ MODIFIÉ
             
-            # Sauvegarder le meilleur modèle
+            # Save best model
             if best_value is None or best_value > avg_val_loss:
                 best_value = avg_val_loss
                 if args.output_folder is not None:
                     with open(args.model_path, 'wb') as f:
                         torch.save(benchmark.model.state_dict(), f)
-                    print(f"💾 Model saved! Best val loss: {avg_val_loss:.4f}")
+                    print(f"💾 Model saved! Best val loss: {avg_val_loss:.4f}, Acc: {avg_val_accuracy:.4f}")  # ✅ MODIFIÉ
             
-            # Sauvegarder tous les 10 epochs
+            # Save checkpoint every 10 epochs
             if (epoch + 1) % 10 == 0 and args.output_folder is not None:
                 checkpoint_path = args.model_path.replace('model.th', f'checkpoint_epoch_{epoch+1}.th')
                 with open(checkpoint_path, 'wb') as f:
                     torch.save(benchmark.model.state_dict(), f)
                 print(f"📌 Checkpoint saved at epoch {epoch + 1}")
+            
+            # ============= EARLY STOPPING CHECK =============
+            early_stopping(avg_val_loss)
+            
+            if early_stopping.early_stop:
+                print(f"\n{'='*80}")
+                print(f"🛑 TRAINING STOPPED EARLY AT EPOCH {epoch + 1}")
+                print(f"{'='*80}\n")
+                break
         
         print(f"\n{'='*80}")
         print(f"✅ TRAINING COMPLETED!")
@@ -228,7 +297,7 @@ def main(args):
         return
     
     # =====================================================================
-    # DATASETS STANDARD (omniglot, miniimagenet, sinusoid)
+    # STANDARD DATASETS (omniglot, miniimagenet, sinusoid)
     # =====================================================================
     print("📊 STANDARD DATASET - Using BatchMetaDataLoader\n")
     

@@ -3,7 +3,6 @@ import os
 import random
 from pathlib import Path
 from collections import namedtuple
-
 from PIL import Image
 import torch
 from torch.utils.data import Dataset
@@ -12,7 +11,6 @@ from torchvision.transforms import Compose, Resize, ToTensor, Normalize
 from torchmeta.datasets import Omniglot, MiniImagenet
 from torchmeta.toy import Sinusoid
 from torchmeta.transforms import ClassSplitter, Categorical, Rotation
-from torchvision.transforms import ToTensor, Resize, Compose
 
 from maml.model import ModelConvOmniglot, ModelConvMiniImagenet, ModelMLPSinusoid
 from maml.utils import ToTensor1D
@@ -22,6 +20,18 @@ from maml.utils import ToTensor1D
 # ============================================================================
 Benchmark = namedtuple('Benchmark', 'meta_train_dataset meta_val_dataset '
                                     'meta_test_dataset model loss_function')
+
+# ============================================================================
+# TRANSFORMATION POUR IMAGES THERMIQUES (RGB)
+# ============================================================================
+THERMAL_MEAN = [0.485, 0.456, 0.406]
+THERMAL_STD = [0.229, 0.224, 0.225]
+
+THERMAL_TRANSFORM = Compose([
+    Resize((84, 84)),  # ✅ CHANGÉ de 224 à 84 (taille originale MiniImagenet)
+    ToTensor(),
+    Normalize(mean=THERMAL_MEAN, std=THERMAL_STD)
+])
 
 # ============================================================================
 # CLASSE THERMALMETADATASET
@@ -129,20 +139,6 @@ class ThermalMetaDataset(Dataset):
             'test': (query_x, query_y)
         }
 
-# ============================================================================
-# TRANSFORMATION POUR IMAGES THERMIQUES (RGB)
-# ============================================================================
-# ============================================================================
-# TRANSFORMATION POUR IMAGES THERMIQUES (RGB)
-# ============================================================================
-THERMAL_MEAN = [0.485, 0.456, 0.406]
-THERMAL_STD = [0.229, 0.224, 0.225]
-
-THERMAL_TRANSFORM = Compose([
-    Resize((224, 224)),  # ← CHANGÉ DE 84 À 224!
-    ToTensor(),
-    Normalize(mean=THERMAL_MEAN, std=THERMAL_STD)
-])
 # ============================================================================
 # FONCTION PRINCIPALE GET_BENCHMARK_BY_NAME
 # ============================================================================
@@ -294,7 +290,7 @@ def get_benchmark_by_name(name,
             num_shots_test=num_shots_test
         )
         
-        # Utiliser ModelConvMiniImagenet pour RGB (3 canaux, 84x84)
+        # Utiliser ModelConvMiniImagenet pour RGB (3 canaux, 224×224)
         model = ModelConvMiniImagenet(
             out_features=num_ways,
             hidden_size=hidden_size if hidden_size is not None else 64

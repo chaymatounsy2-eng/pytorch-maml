@@ -1,0 +1,20 @@
+{
+  "folder": "C:\\Users\\user\\Desktop\\pytorch-maml-v2\\data",
+  "dataset": "thermal",
+  "output_folder": "./results",
+  "num_ways": 2,
+  "num_shots": 5,
+  "num_shots_test": 10,
+  "hidden_size": 64,
+  "batch_size": 2,
+  "num_steps": 1,
+  "num_epochs": 150,
+  "num_batches": 100,
+  "step_size": 0.01,
+  "first_order": false,
+  "meta_lr": 0.001,
+  "num_workers": 1,
+  "verbose": true,
+  "use_cuda": true,
+  "model_path": "C:\\Users\\user\\Desktop\\pytorch-maml-v2\\results\\2026-03-02_101009\\model.th"
+}
