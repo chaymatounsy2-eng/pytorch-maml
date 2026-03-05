@@ -4,6 +4,8 @@ import os
 import time
 import json
 import logging
+import random          # ← AJOUTER
+import numpy as np
 
 from torchmeta.utils.data import BatchMetaDataLoader
 from torch.utils.data import DataLoader
@@ -12,8 +14,25 @@ from torchmeta.utils import gradient_update_parameters
 from maml.datasets import get_benchmark_by_name
 from maml.metalearners import ModelAgnosticMetaLearning
 
+# ===== SET RANDOM SEEDS FOR REPRODUCIBILITY =====  ← ICI!
+SEED = 42
+
+torch.manual_seed(SEED)
+np.random.seed(SEED)
+random.seed(SEED)
+
+if torch.cuda.is_available():
+    torch.cuda.manual_seed(SEED)
+    torch.cuda.manual_seed_all(SEED)
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
+
+print(f"\n🌱 Random seed set to {SEED} for reproducibility\n")
+# ===== END RANDOM SEEDS =====
+
 # Désactiver le debug logging de PIL
 logging.getLogger('PIL.TiffImagePlugin').setLevel(logging.WARNING)
+
 
 # ============================================================================
 # CLASSE EarlyStopping

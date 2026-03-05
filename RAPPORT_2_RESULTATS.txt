@@ -1,0 +1,429 @@
+
+╔════════════════════════════════════════════════════════════════════════════════╗
+║                                                                                ║
+║                    RAPPORT 2: INTERPRÉTATION DES RÉSULTATS                    ║
+║                      Analyse détaillée de l'entraînement                       ║
+║                                                                                ║
+╚════════════════════════════════════════════════════════════════════════════════╝
+
+Date: 2026-03-04 10:37:53
+Modèle: MAML avec Conv4 + GlobalAvgPool
+Dataset: Thermal (Lettuce + Riz → Olive)
+
+═══════════════════════════════════════════════════════════════════════════════════
+
+1. RÉSUMÉ EXÉCUTIF
+═══════════════════
+
+RÉSULTATS CLÉS:
+  ✓ Best Val Loss: 0.0924 (Epoch 7)
+  ✓ Best Val Acc: 97.90% (Epoch 7)
+  ✗ Test Accuracy: 63.95% ← PROBLÈME!
+  ✗ Test Loss: 1.3293
+  
+PROBLÈME MAJEUR DÉTECTÉ:
+  → Écart important entre validation (97.9%) et test (63.95%)
+  → Signe d'OVERFITTING sévère
+  → Modèle ne généralise pas à espèces nouvelles
+
+═══════════════════════════════════════════════════════════════════════════════════
+
+2. ANALYSE PHASE PAR PHASE
+═══════════════════════════
+
+2.1 PHASE 1: APPRENTISSAGE (EPOCHS 1-2)
+────────────────────────────────────────
+
+Epoch 1:
+  Train Loss: 0.2115 → Train Acc: 92.33%
+  Val Loss: 0.1586 → Val Acc: 95.28%
+  Gap: 0.0529 (Train pire que Val - normal!)
+  
+  INTERPRÉTATION:
+    ✓ Modèle commence à apprendre
+    ✓ Val meilleur que train (pas d'overfitting encore)
+    ✓ Performance acceptable pour epoch 1
+
+Epoch 2: ✅ MEILLEUR MODÈLE!
+  Train Loss: 0.0901 → Train Acc: 97.28%
+  Val Loss: 0.1018 → Val Acc: 97.80%
+  Gap: -0.0117 (Train pire que Val - toujours ok!)
+  
+  INTERPRÉTATION:
+    ✓ Amélioration significative
+    ✓ Modèle toujours généralisable
+    ✓ Point de départ idéal
+
+⭐ VERDICT PHASE 1: APPRENTISSAGE RÉUSSI!
+   Le modèle apprend des patterns généraux.
+
+2.2 PHASE 2: DÉBUT OVERFITTING (EPOCHS 3-7)
+─────────────────────────────────────────────
+
+Epoch 3:
+  Train Loss: 0.0833 → Train Acc: 97.45%
+  Val Loss: 0.1308 → Val Acc: 96.08%
+  Gap: -0.0475 (Gap commence à augmenter)
+  
+  SIGNAL D'ALERTE:
+    ⚠️ Val Loss augmente (0.1018 → 0.1308)
+    ⚠️ Val Acc baisse légèrement (97.80% → 96.08%)
+    ⚠️ Gap négatif croissant (-0.0475)
+
+Epochs 4-7:
+  Train Loss: 0.0157 → 0.0012 (baisse ÉNORME)
+  Train Acc: 99.78% → 100.00% (PARFAIT!)
+  Val Loss: 0.1439 → 0.0924 (améliore, puis stagne)
+  Val Acc: 96.15% → 97.90%
+  
+  PHÉNOMÈNE OBSERVÉ:
+    • Train loss baisse drastiquement
+    • Train acc → 100% (MÉMORISATION!)
+    • Val loss varie (0.14, 0.14, 0.11, 0.09)
+    • Val acc stagne autour de 97%
+
+🔴 VERDICT PHASE 2: OVERFITTING COMMENCE!
+   Modèle commence à mémoriser au lieu de généraliser.
+
+2.3 PHASE 3: OVERFITTING SÉVÈRE (EPOCHS 8-22)
+───────────────────────────────────────────────
+
+Epoch 8:
+  Train Loss: 0.0006 → Train Acc: 100.00%
+  Val Loss: 0.1573 → Val Acc: 96.55%
+  Gap: -0.1567
+  
+  ÉVOLUTION INQUIÉTANTE:
+    ❌ Train: 100% (parfait, mais MÉMORISATION!)
+    ❌ Val Loss saute à 0.1573 (pire qu'epoch 7)
+    ❌ Gap très négatif (-0.1567)
+
+Epochs 9-22:
+  Pattern constant:
+    • Train Loss: 0.0005 → 0.0001 (quasi zéro)
+    • Train Acc: 100.00% (toujours parfait)
+    • Val Loss: varie entre 0.10 et 0.41 (très bruyant!)
+    • Val Acc: baisse graduellement (96% → 92%)
+    • Gap: devient très négatif (-0.17 à -0.41)
+
+PHÉNOMÈNE: NOISE STATISTIQUE
+  Raison: Val set petit (423 images)
+  → Batches aléatoires changent beaucoup
+  → Val Loss fluctue naturellement
+
+🔴🔴 VERDICT PHASE 3: OVERFITTING SÉVÈRE!
+   Modèle mémorise train/val, ne généralise plus.
+
+═══════════════════════════════════════════════════════════════════════════════════
+
+3. ANALYSE DÉTAILLÉE: OVERFITTING
+═══════════════════════════════════
+
+3.1 SIGNAUX D'OVERFITTING
+──────────────────────────
+
+SIGNAL 1: Train Accuracy = 100%
+  Epoch 6 onwards: Train Acc = 100.00%
+  
+  INTERPRÉTATION:
+    ❌ Modèle prédit PARFAITEMENT sur train
+    ❌ Trop bon pour être vrai!
+    ❌ Signe de mémorisation
+
+SIGNAL 2: Val Loss augmente après Epoch 7
+  Epoch 7: Val Loss = 0.0924 (meilleur)
+  Epoch 8: Val Loss = 0.1573 (pire!)
+  Epoch 19: Val Loss = 0.4096 (très mauvais!)
+  
+  INTERPRÉTATION:
+    ❌ Val Loss n'améliore plus
+    ❌ Commence à augmenter
+    ❌ Modèle perd généralisation
+
+SIGNAL 3: Gap croissant
+  Epoch 1: Gap = 0.0529 (acceptable)
+  Epoch 7: Gap = -0.0912 (overfitting léger)
+  Epoch 19: Gap = -0.4095 (overfitting SÉVÈRE!)
+  
+  INTERPRÉTATION:
+    ❌ Train Loss << Val Loss
+    ❌ Écart énorme!
+    ❌ Modèle très overfit
+
+3.2 VISUALISATION: TRAIN vs VAL ACCURACY
+──────────────────────────────────────────
+
+Accuracy (%)
+│
+100% ├─────────────── Train Acc (plateau)
+     │              ↑ Overfitting starts
+  97% ├─────────┐   ← Val Acc (plateau)
+     │         │ \  ↘ Val baisse graduellement
+  95% ├───┐    │  \
+     │   └────┘    \
+  93% │             \
+     │              \
+  91% │               \
+     │                \
+  89% └─────────────────────→ Epochs
+       1  2  3  4  5  6  7  8  9 ... 22
+
+OBSERVATION:
+  • Epochs 1-2: Courbes ensemble (bon!)
+  • Epoch 3+: Train monte, Val stagne (overfitting!)
+  • Epoch 7: Val peak (meilleur moment)
+  • Epoch 8+: Val baisse (pire!)
+
+3.3 ROOT CAUSE: Pourquoi l'overfitting?
+─────────────────────────────────────────
+
+CAUSE 1: Modèle trop grand
+  • 64 filtres × 4 convolutions
+  • ~400k poids
+  • Pour 387 images d'entraînement
+  • Ratio: 1 poids par image! 😱
+
+CAUSE 2: Dataset trop petit
+  • 387 images (très petit!)
+  • Seulement 2 espèces
+  • Déséquilibrés (riz >> lettuce)
+  • Modèle peut mémoriser facilement
+
+CAUSE 3: Peu de variété
+  • Seulement 100 batches par epoch
+  • Tâches du même dataset
+  • Pas assez de diversité
+  • Modèle apprend patterns spécifiques
+
+═══════════════════════════════════════════════════════════════════════════════════
+
+4. RÉSULTATS DU TEST
+══════════════════════
+
+4.1 TEST SUR OLIVE (Espèce jamais vue)
+───────────────────────────────────────
+
+TEST SET: 174 healthy + 173 diseased = 347 images
+
+Résultats par batch (sample):
+  Batch 10: Loss=2.0704, Acc=57.5%
+  Batch 20: Loss=0.8074, Acc=65.0%
+  Batch 30: Loss=0.8209, Acc=67.5%
+  Batch 40: Loss=2.1167, Acc=42.5% ← Très mauvais!
+  Batch 50: Loss=0.9613, Acc=62.5%
+  ...
+  Batch 100: Loss=2.5693, Acc=52.5%
+
+RÉSULTAT FINAL:
+  ✗ Test Loss: 1.3293 (très haut!)
+  ✗ Test Accuracy: 63.95% (MAUVAIS!)
+
+4.2 COMPARAISON: Val vs Test Accuracy
+──────────────────────────────────────
+
+                Val Accuracy    Test Accuracy   Écart
+Lettuce+Riz:    97.90%          63.95%          -33.95%
+                
+INTERPRÉTATION:
+  ❌ Énorme divergence!
+  ❌ Modèle performant sur val (97.9%)
+  ❌ Échoue sur test (63.95%)
+  ❌ Raison: Overfitting + distribution shift
+
+4.3 ANALYSE DES CAUSES DU MAUVAIS TEST
+────────────────────────────────────────
+
+CAUSE 1: OVERFITTING
+  • Modèle optimisé pour Lettuce+Riz
+  • Patterns spécifiques à ces espèces
+  • Olive a patterns DIFFÉRENTS
+  • Modèle ne généralise pas
+
+CAUSE 2: DISTRIBUTION SHIFT
+  Entraînement: Lettuce + Riz thermales
+  Test: Olive thermale (DIFFÉRENTE!)
+  
+  • Images thermales non identiques
+  • Patterns de chaleur différents
+  • Modèle n'a jamais vu ces patterns
+
+CAUSE 3: MODÈLE TROP SIMPLE POUR TÂCHE
+  • Conv4 peut-être insuffisant
+  • Pas assez d'abstraction
+  • Pas assez de features complexes
+
+═══════════════════════════════════════════════════════════════════════════════════
+
+5. TIMELINE D'ENTRAÎNEMENT
+═══════════════════════════
+
+Epoch  Train Loss  Train Acc  Val Loss  Val Acc  Phase        Status
+─────  ──────────  ────────  ────────  ───────  ───────────  ──────────
+1      0.2115      92.33%    0.1586    95.28%   Apprentissage ✓
+2      0.0901      97.28%    0.1018    97.80%   Apprentissage ✓✓ BEST
+3      0.0833      97.45%    0.1308    96.08%   Début OF      ⚠️
+4      0.0157      99.78%    0.1439    96.15%   Overfitting   ❌
+5      0.0082      99.95%    0.1439    97.18%   Overfitting   ❌
+6      0.0023      100.00%   0.1088    97.65%   Overfitting   ❌
+7      0.0012      100.00%   0.0924    97.90%   Overfitting   ⭐ Val BEST
+8      0.0006      100.00%   0.1573    96.55%   Overfitting   ❌❌
+...
+19     0.0001      100.00%   0.4096    92.48%   Overfitting   ❌❌❌
+20     0.0001      100.00%   0.3072    93.65%   Overfitting   ❌❌❌
+21     0.0001      100.00%   0.3373    92.85%   Overfitting   ❌❌❌
+22     0.0001      100.00%   0.3729    92.03%   Overfitting   🛑 STOP
+
+═══════════════════════════════════════════════════════════════════════════════════
+
+6. RECOMMANDATIONS
+════════════════════
+
+6.1 COURT TERME (Quick Fixes)
+──────────────────────────────
+
+1. UTILISER EPOCH 7 COMME MEILLEUR MODÈLE
+   • Epoch 7: Val Loss = 0.0924, Val Acc = 97.90%
+   • Meilleur point de généralisation
+   • Model_path.replace('model.th', 'best_model.th')
+
+2. RÉDUIRE HIDDEN_SIZE
+   Changement:
+     AVANT: --hidden-size 64
+     APRÈS: --hidden-size 32
+   
+   Avantage:
+     • 2× moins de poids
+     • Moins de mémorisation
+     • Meilleure généralisation
+
+3. AUGMENTER EARLY STOPPING PATIENCE
+   Changement:
+     AVANT: patience=15
+     APRÈS: patience=25
+   
+   Raison:
+     • Variance naturelle dans validation
+     • 15 epochs peut être trop tôt
+     • Laisser plus de temps
+
+6.2 MOYEN TERME (Amélioration modèle)
+──────────────────────────────────────
+
+4. AJOUTER OLIVE AU TRAINING
+   Impact ÉNORME!
+   
+   AVANT:
+     Train: Lettuce + Riz (387 images)
+     Val: Lettuce + Riz (423 images)
+     Test: Olive (347 images) ← Complètement nouveau!
+   
+   APRÈS:
+     Train: Lettuce + Riz + OLIVE (387 + 250 = 637)
+     Val: Lettuce + Riz (423 images)
+     Test: Olive (97 images restantes)
+   
+   AVANTAGE:
+     • Modèle voit patterns Olive en train
+     • Mieux généralise
+     • Distribution plus homogène
+
+5. DATA AUGMENTATION
+   Ajouter dans datasets.py:
+   
+     THERMAL_TRANSFORM = Compose([
+       Resize((84, 84)),
+       RandomRotation(15),  # ← AJOUTER
+       RandomAffine(degrees=0, translate=(0.1, 0.1)),  # ← AJOUTER
+       RandomHorizontalFlip(),  # ← AJOUTER
+       ToTensor(),
+       Normalize(...)
+     ])
+   
+   AVANTAGE:
+     • Créer variations d'images
+     • Réduire overfitting
+     • Augmenter dataset virtuellement
+
+6. RÉDUIRE NUM_SHOTS
+   Changement:
+     AVANT: --num-shots 5
+     APRÈS: --num-shots 3
+   
+   Raison:
+     • Moins d'images → moins de mémorisation
+     • Force apprentissage patterns généraux
+     • Plus dur pour modèle = meilleure généralisation
+
+6.3 LONG TERME (Architecture)
+────────────────────────────
+
+7. TESTER ARCHITECTURES PLUS PETITES
+   • ResNet18 (au lieu de Conv4)
+   • MobileNet (efficace)
+   • Attention mechanisms
+
+8. AJOUTER REGULARIZATION
+   • Dropout
+   • L1/L2 regularization
+   • Batch normalization tuning
+
+═══════════════════════════════════════════════════════════════════════════════════
+
+7. CONCLUSION GÉNÉRALE
+═══════════════════════
+
+SUCCÈS:
+  ✓ Modèle a appris (epoch 1-2 excellent)
+  ✓ Val accuracy atteint 97.9%
+  ✓ Early stopping fonctionne bien
+  ✓ Architecture adaptée
+
+PROBLÈMES:
+  ✗ Overfitting massif (à partir epoch 3)
+  ✗ Train accuracy = 100% (mémorisation)
+  ✗ Test accuracy = 63.95% (mauvais)
+  ✗ Écart val-test énorme (-34%)
+
+ROOT CAUSE:
+  • Dataset trop petit (387 images)
+  • Modèle trop grand (64 filtres)
+  • Pas de diversité (2 espèces seulement)
+
+SOLUTION:
+  1. Ajouter OLIVE au training (impact maximal!)
+  2. Réduire hidden_size: 64 → 32
+  3. Data augmentation
+  4. Réduire num_shots: 5 → 3
+
+NEXT STEP:
+  → Implémenter recommandations
+  → Retester
+  → Évaluer amélioration
+
+═══════════════════════════════════════════════════════════════════════════════════
+
+APPENDICE: MÉTRIQUES CLÉS
+═══════════════════════════
+
+LOSS (Cross-Entropy):
+  • Epoch 2: 0.1018 (meilleur)
+  • Epoch 7: 0.0924 (meilleur val)
+  • Epoch 19: 0.4096 (pire)
+  • Test: 1.3293 (très mauvais)
+
+ACCURACY:
+  • Train max: 100% (epoch 6+)
+  • Val max: 97.90% (epoch 7)
+  • Val final: 92.03% (epoch 22)
+  • Test: 63.95% (mauvais!)
+
+GAP (Train - Val):
+  • Epoch 1: 0.0529 (ok)
+  • Epoch 7: -0.0912 (léger overfitting)
+  • Epoch 19: -0.4095 (sévère!)
+  • Epoch 22: -0.3728 (sévère!)
+
+═══════════════════════════════════════════════════════════════════════════════════
+
+Fin du rapport.
+

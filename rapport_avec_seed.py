@@ -1,0 +1,282 @@
+from datetime import datetime
+
+rapport = f"""
+╔════════════════════════════════════════════════════════════════╗
+║                                                                ║
+║     RAPPORT FINAL: MAML AVEC SEED = 42 (BASELINE)             ║
+║              Analyse détaillée et conclusions                  ║
+║                                                                ║
+╚════════════════════════════════════════════════════════════════╝
+
+Date: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
+Modèle: MAML avec Conv4 + GlobalAvgPool
+Dataset: Thermal (Lettuce + Riz → Olive)
+SEED: 42 (REPRODUCTIBLE! ✅)
+
+═══════════════════════════════════════════════════════════════════
+
+1. RÉSUMÉ EXÉCUTIF
+
+RÉSULTATS CLÉS:
+  ✓ Best Val Loss: 0.0768 (Epoch 2)
+  ✓ Best Val Acc: 98.50% (Epoch 2)
+  ✓ Test Accuracy: 62.02% (STABLE avec SEED! ✅)
+  ✓ Test Loss: 0.9274
+  ✓ Early Stop: Epoch 17 (15 epochs sans amélioration)
+
+DÉCOUVERTE IMPORTANTE:
+  ✅ SEED = 42 fonctionne PARFAITEMENT!
+  ✅ Résultats 100% reproductibles!
+  ✅ Run 1: 62.02%
+  ✅ Run 2: 62.02% (IDENTIQUE!)
+
+PROBLÈME RÉSOLU:
+  ❌ AVANT SEED: Variance énorme (6.15%)
+     Run 1: 63.95%, Run 2: 57.80%, Run 3: 57.82%
+  
+  ✅ APRÈS SEED: Reproductibilité totale!
+     Run 1: 62.02%, Run 2: 62.02% (IDENTIQUE!)
+
+═══════════════════════════════════════════════════════════════════
+
+2. ANALYSIS PAR PHASE
+
+2.1 PHASE 1: APPRENTISSAGE RAPIDE (EPOCHS 1-2)
+
+Epoch 1 (Démarrage):
+  Train Loss: 0.2027 → Train Acc: 92.33%
+  Val Loss: 0.1600 → Val Acc: 95.10%
+  
+  INTERPRÉTATION:
+    ✓ Modèle commence à apprendre rapidement
+    ✓ Gap train-val normal (train pire)
+    ✓ Pas d'overfitting encore
+    ✓ Base solide établie
+
+Epoch 2: ⭐ MEILLEUR MOMENT! 
+  Train Loss: 0.0590 → Train Acc: 98.60%
+  Val Loss: 0.0768 → Val Acc: 98.50%
+  
+  INTERPRÉTATION:
+    ✓ ÉNORME amélioration en 1 epoch!
+    ✓ Val Loss baisse de 0.1600 → 0.0768 (-52%)
+    ✓ Val Acc augmente de 95.10% → 98.50% (+3.40%)
+    ✓ Model saved! (Best val loss)
+    ✓ Gap train-val très petit (-0.0178) = généralisation BONNE!
+    ✓ Point optimal avant overfitting!
+
+✅ VERDICT PHASE 1: APPRENTISSAGE EXCELLENT!
+   Modèle apprend patterns généraux très efficacement
+
+═══════════════════════════════════════════════════════════════════
+
+2.2 PHASE 2: DÉBUT OVERFITTING (EPOCHS 3-17)
+
+Epoch 3:
+  Train Loss: 0.0903 → Train Acc: 97.30%
+  Val Loss: 0.1347 → Val Acc: 95.98%
+  
+  SIGNAL D'ALERTE:
+    ⚠️ Val Loss augmente (0.0768 → 0.1347, +75%!)
+    ⚠️ Val Acc baisse (98.50% → 95.98%, -2.52%)
+    ⚠️ Gap train-val s'agrandit (-0.0444)
+
+Epochs 4-17:
+  Train Loss: 0.0263 → 0.0002 (baisse quasi zéro)
+  Train Acc: 99.30% → 100.00% (PARFAIT!)
+  Val Loss: Fluctue 0.20 → 0.16 (varie beaucoup, tendance haut)
+  Val Acc: 93.85% → 96.10% (baisse puis fluctue)
+  
+  PATTERN OBSERVÉ:
+    • Train continue à améliorer (mémorisation!)
+    • Train Acc = 100% dès epoch 6 (impossible = overfitting!)
+    • Val Loss augmente après epoch 2 (signe clair overfitting)
+    • Val Acc baisse après epoch 2 (généralisation perdue)
+    • Early stop triggered à epoch 17 (15 epochs sans amélioration)
+
+🔴 VERDICT PHASE 2: OVERFITTING SÉVÈRE!
+   Modèle mémorise training/validation, perd généralisation
+
+═══════════════════════════════════════════════════════════════════
+
+3. EXPLICATIONS DE L'OVERFITTING
+
+CAUSE 1: MODÈLE TROP GRAND
+  • 64 filtres × 4 convolutions = ~400k poids
+  • Pour 387 images training (déséquilibré: 31+31+74+251)
+  • Ratio poids/images ≈ 1:1 = ÉNORME!
+  • Modèle peut mémoriser chaque image!
+
+CAUSE 2: DATASET TROP PETIT
+  • 387 images training
+  • Seulement 2 espèces (Lettuce + Riz)
+  • Déséquilibré (riz >> lettuce)
+  • Pas assez de diversité
+
+CAUSE 3: OVERFITTING SPÉCIFIQUE À LETTUCE+RIZ
+  • Modèle apprend patterns très spécifiques
+  • Patterns de Lettuce ≠ Patterns de Riz ≠ Patterns de Olive!
+  • Olive est complètement différent!
+  • Modèle n'a JAMAIS vu Olive en training
+
+═══════════════════════════════════════════════════════════════════
+
+4. TEST RESULTS: POURQUOI 62.02%?
+
+Test Set: 174 healthy + 173 diseased = 347 Olive images (jamais vues!)
+
+Test Accuracy: 62.02%
+  • Mieux que random (50%) ✓
+  • Mais pire que validation (98.50%) ❌
+  • Écart: -36.48% (ÉNORME!)
+
+Test Loss: 0.9274
+  • Relativement haut (val loss = 0.0768)
+  • Modèle peu confiant sur Olive
+
+ANALYSE:
+  ❌ Overfitting sévère!
+  ❌ Modèle optimisé pour Lettuce+Riz
+  ❌ Olive patterns très différents
+  ❌ Généralisation faible sur espèce nouvelle
+
+COMPARAISON AVANT/APRÈS SEED:
+  ┌──────────────────────────────────┐
+  │ AVANT SEED                        │
+  │ Run 1: 63.95% (chanceux!)        │
+  │ Run 2: 57.80% (malchanceux)      │
+  │ Run 3: 57.82% (malchanceux)      │
+  │ Variance: 6.15% ❌               │
+  │ Moyenne réelle: 59.86%            │
+  │                                   │
+  │ APRÈS SEED                        │
+  │ Run 1: 62.02% (stable!)          │
+  │ Run 2: 62.02% (identique!) ✓     │
+  │ Variance: 0% ✅                  │
+  │ Vraie performance: 62.02%         │
+  └──────────────────────────────────┘
+
+CONCLUSION:
+  ✅ SEED = 42 a amélioré reproductibilité!
+  ✅ Vraie performance = 62.02% (stable)
+  ❌ Mais résultat = 62.02% (pas de grosse amélioration)
+  ✅ C'est OK! C'est la vraie valeur!
+
+═══════════════════════════════════════════════════════════════════
+
+5. TIMELINE D'ENTRAÎNEMENT
+
+Epoch  Train L  Train A  Val L    Val A    Status
+─────  ────────  ──────  ────────  ─────────  ─────────────
+1      0.2027    92.33%  0.1600    95.10%   ✓ Apprentissage
+2      0.0590    98.60%  0.0768    98.50%   ⭐ MEILLEUR!
+3      0.0903    97.30%  0.1347    95.98%   ⚠️ Overfitting commence
+4-6    0.0263→   99.30→  0.2016→   93.85→   ❌ Overfitting progresse
+       0.0033    100.00% 0.0774    98.25%   (mémorisation)
+7-17   0.0014→   100.00% 0.1598→   96.10%   ❌ Overfitting sévère
+       0.0002    100.00% (fluctue)          (train=100%, généralisation faible)
+
+═══════════════════════════════════════════════════════════════════
+
+6. RECOMMANDATIONS POUR AMÉLIORATION
+
+6.1 COURT TERME (Quick wins):
+
+1. RÉDUIRE hidden_size: 64 → 32
+   • Moins de poids (2× réduction)
+   • Moins de capacité de mémorisation
+   • Devrait aider overfitting
+   • À tester IMMÉDIATEMENT!
+
+2. AJOUTER DATA AUGMENTATION
+   • Créer variations artificielles d'images
+   • Augmenter diversité dataset
+   • Très efficace contre overfitting
+   • TRÈS IMPORTANT!
+
+3. AUGMENTER EARLY STOPPING PATIENCE
+   • Changer patience: 15 → 25
+   • Laisser plus de temps à modèle
+   • Mais attention à overfitting!
+   • À combiner avec augmentation
+
+6.2 MOYEN TERME:
+
+4. AJOUTER OLIVE AU TRAINING
+   • Impact ÉNORME!
+   • Modèle verrait patterns Olive en training
+   • Meilleure généralisation
+   • Mais: besoin dataset plus grand
+
+5. RÉDUIRE num_shots: 5 → 3
+   • Moins de shots = moins de mémorisation
+   • Force apprentissage patterns généraux
+   • À tester!
+
+6.3 LONG TERME:
+
+6. AJOUTER RÉGULARIZATION
+   • L1/L2 regularization
+   • Dropout (si pas utilisé)
+   • Batch normalization
+
+═══════════════════════════════════════════════════════════════════
+
+7. NEXT STEPS: MODIFICATIONS À TESTER
+
+ORDRE RECOMMANDÉ:
+
+1️⃣ hidden_size: 64 → 32 (PRIORITÉ!)
+   Attendre résultat → Comparer avec 62.02%
+
+2️⃣ Data augmentation (PRIORITÉ!)
+   Attendre résultat → Comparer
+
+3️⃣ patience: 15 → 25
+   Attendre résultat → Comparer
+
+4️⃣ num_shots: 5 → 3 (optionnel)
+   Attendre résultat → Comparer
+
+IMPORTANT:
+  • Un changement à la fois!
+  • Garder SEED = 42 PARTOUT!
+  • Comparer avec baseline (62.02%)
+  • Voir lequel améliore le plus!
+
+═══════════════════════════════════════════════════════════════════
+
+8. CONCLUSION
+
+✅ SUCCÈS MAJEUR:
+  1. Découvert et prouvé randomness (6.15% variance)
+  2. Ajouté SEED = 42 (reproductibilité 100%!)
+  3. Établi baseline fiable (62.02%)
+  4. Prêt pour modifications!
+
+✅ BASELINE STABLE:
+  • Test Acc: 62.02% (REPRODUCTIBLE!)
+  • Run 1 = Run 2 (IDENTIQUES!)
+  • Science reproductible établie!
+
+❌ PROBLÈME ACTUEL:
+  • Overfitting sévère (train 100%, test 62%)
+  • Modèle ne généralise pas à Olive
+  • Besoin amélioration pour mieux résultats
+
+🚀 PROCHAINES ÉTAPES:
+  1. Tester hidden_size = 32
+  2. Tester data augmentation
+  3. Tester patience = 25
+  4. Trouver meilleure combinaison!
+
+═══════════════════════════════════════════════════════════════════
+
+Fin du rapport.
+"""
+
+with open('RAPPORT_COMPLET_AVEC_SEED.txt', 'w', encoding='utf-8') as f:
+    f.write(rapport)
+
+print(rapport)
+print("\n✅ Rapport sauvegardé: RAPPORT_COMPLET_AVEC_SEED.txt")

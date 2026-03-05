@@ -1,0 +1,368 @@
+from datetime import datetime
+
+report = """
+╔════════════════════════════════════════════════════════════════════════════════╗
+║                                                                                ║
+║                    RAPPORT 1: MÉTHODOLOGIE ET APPROCHE                        ║
+║              Model-Agnostic Meta-Learning (MAML) pour Thermal Imaging         ║
+║                                                                                ║
+╚════════════════════════════════════════════════════════════════════════════════╝
+
+Date: {date}
+Auteur: Équipe de recherche
+Projet: Classification few-shot de maladies de plantes (Imagerie thermique FLIR)
+
+═══════════════════════════════════════════════════════════════════════════════════
+
+1. INTRODUCTION
+═════════════════
+
+1.1 CONTEXTE
+───────────
+Ce projet vise à développer un système de classification de maladies de plantes
+utilisant l'imagerie thermique FLIR (Forward Looking Infrared). Le défi principal
+est de pouvoir généraliser à de nouvelles espèces de plantes avec très peu 
+d'exemples d'entraînement (few-shot learning).
+
+1.2 OBJECTIF PRINCIPAL
+──────────────────────
+Implémenter et entraîner un modèle MAML (Model-Agnostic Meta-Learning) capable de:
+  • Apprendre rapidement de nouvelles tâches avec peu d'exemples (5-shot)
+  • Généraliser sur des espèces jamais vues (olive vs lettuce/riz)
+  • Atteindre >85% d'accuracy sur le test set
+
+1.3 DÉFI PRINCIPAL
+──────────��───────
+  • Petit dataset (387 images d'entraînement)
+  • Déséquilibre des classes (riz dominé par images malades)
+  • Nécessité de généralisation à espèces nouvelles
+  • Risque d'overfitting élevé
+
+═══════════════════════════════════════════════════════════════════════════════════
+
+2. BACKGROUND THÉORIQUE
+════════════════════════
+
+2.1 LEARNING PARADIGMS
+──────────────────────
+
+TRADITIONAL LEARNING:
+  • Grande quantité de données
+  • Temps d'entraînement long
+  • Peu flexible pour nouvelles tâches
+  └─ Exemple: ResNet sur ImageNet
+
+FEW-SHOT LEARNING:
+  • Peu d'exemples par classe (5-10 images)
+  • Adaptation rapide
+  • Apprentissage de tâches nouvelles
+  └─ Exemple: Classification d'une nouvelle espèce en 5 shots
+
+META-LEARNING (Learning to Learn):
+  • Apprendre comment apprendre
+  • Optimisation au niveau des tasks
+  • Généralisation à travers les tâches
+  └─ Exemple: MAML, Prototypical Networks
+
+2.2 MODEL-AGNOSTIC META-LEARNING (MAML)
+────────────────────────────────────────
+
+IDÉE PRINCIPALE:
+  Trouver des poids initiaux θ tels que quelques pas de gradient descent
+  sur une nouvelle tâche donnent une bonne performance.
+
+ALGORITHME MAML:
+  
+  For each meta-iteration:
+    For each task T in batch:
+      1. INNER LOOP (Support set):
+         • Forward pass sur support set
+         • Calculer loss
+         • Adapter les poids: θ' = θ - α∇L_support
+         
+      2. OUTER LOOP (Query set):
+         • Forward pass avec θ' sur query set
+         • Calculer loss query
+         • Meta-update: θ = θ - β∇L_query
+
+  Résultat: Modèle optimisé pour adaptation rapide
+
+PARAMÈTRES MAML CLÉS:
+  • num_steps (inner loop): 1 (un pas d'adaptation)
+  • step_size (α): 0.01 (learning rate inner loop)
+  • meta_lr (β): 0.001 (learning rate outer loop)
+  • num_ways: 2 (2 classes: healthy vs diseased)
+  • num_shots: 5 (5 images d'entraînement par classe)
+  • num_shots_test: 10 (10 images de validation par classe)
+
+AVANTAGES MAML:
+  ✓ Model-agnostic (marche avec tout modèle)
+  ✓ Few-shot capable
+  ✓ Rapide à adapter
+  ✓ Peu de poids à mettre à jour
+
+═══════════════════════════════════════════════════════════════════════════════════
+
+3. DATASET: THERMAL IMAGING
+════════════════════════════
+
+3.1 COMPOSITION
+───────────────
+
+TRAIN SET (background_set/meta_train):
+  • Lettuce:  31 healthy + 31 diseased = 62 images
+  • Riz:      74 healthy + 251 diseased = 325 images
+  • TOTAL:    387 images, 2 espèces
+
+VAL SET (background_set/meta_val):
+  • Lettuce:  8 healthy + 8 diseased = 16 images
+  • Riz:      93 healthy + 314 diseased = 407 images
+  • TOTAL:    423 images, 2 espèces
+
+TEST SET (evaluation_set):
+  • Olive:    174 healthy + 173 diseased = 347 images
+  • TOTAL:    347 images, 1 espèce NOUVELLE
+
+PROPRIÉTÉS:
+  • Images: Format FLIR RGB (imagerie thermique)
+  • Taille originale: Variable
+  • Redimensionnement: 84×84 pixels
+  • Nombre de canals: 3 (RGB)
+  • Normalisation: ImageNet standard
+
+3.2 CHALLENGE: TRAIN ≠ TEST DISTRIBUTION
+──────────────────────────────────────────
+  Train species: Lettuce + Riz (384 images)
+  Test species: Olive (347 images, JAMAIS VUES!)
+  
+  → Modèle doit généraliser à espèces complètement nouvelles!
+  → Test d'vraie capacité few-shot
+
+═══════════════════════════════════════════════════════════════════════════════════
+
+4. ARCHITECTURE DU MODÈLE
+═════════════════════════
+
+4.1 MODÈLE ORIGINAL (MiniImagenet)
+────────────────────────────────────
+
+ModelConvMiniImagenet:
+  • 4 convolution blocks
+  • 64 filtres par block
+  • Kernel size: 3×3
+  • Stride: 1, Padding: 1
+  • MaxPool2d(2) après chaque block
+  
+  PROBLÈME IDENTIFIÉ: 
+    ❌ Flatten au lieu de GlobalAvgPool
+    ❌ 1600 features pour FC (trop!)
+    ❌ Risque d'overfitting sur petit dataset
+
+4.2 MODIFICATIONS APPORTÉES
+─────────────────────────────
+
+AMÉLIORATION 1: Global Average Pooling
+  AVANT:
+    Conv4 → Flatten → FC(1600 → 2)
+    
+  APRÈS:
+    Conv4 → GlobalAvgPool2d(1) → FC(64 → 2)
+    
+  AVANTAGE:
+    • Position-invariant (invariance spatiale)
+    ��� 64 features au lieu de 1600 (25× moins!)
+    • Moins d'overfitting
+    • Meilleure généralisation
+
+ARCHITECTURE FINALE:
+  
+  Input (84×84×3)
+    ↓
+  Conv(3→64) + ReLU + MaxPool(2) → 42×42×64
+    ↓
+  Conv(64→64) + ReLU + MaxPool(2) → 21×21×64
+    ↓
+  Conv(64→64) + ReLU + MaxPool(2) → 10×10×64
+    ↓
+  Conv(64→64) + ReLU + MaxPool(2) → 5×5×64
+    ↓
+  GlobalAvgPool2d(1) → 1×1×64 (64 features)
+    ↓
+  Linear(64 → 2) → Output (2 logits)
+    ↓
+  Softmax → Probabilities [P(healthy), P(diseased)]
+
+═══════════════════════════════════════════════════════════════════════════════════
+
+5. HYPERPARAMÈTRES FINAUX
+═════════════════════════
+
+CONFIGURATION UTILISÉE:
+
+Data Configuration:
+  • dataset: thermal
+  • num_ways: 2 (2-way: healthy vs diseased)
+  • num_shots: 5 (support set: 5 images/classe)
+  • num_shots_test: 10 (query set: 10 images/classe)
+  • batch_size: 2 (2 tâches par batch)
+  • num_batches: 100 (100 batches par epoch)
+
+Model Configuration:
+  • hidden_size: 64 (64 filtres convolution)
+  • Architecture: Conv4 + GlobalAvgPool + FC
+
+Optimization Configuration:
+  • optimizer: Adam
+  • meta_lr: 0.001 (outer loop learning rate)
+  • step_size (inner): 0.01 (inner loop learning rate)
+  • num_steps: 1 (nombre de pas d'adaptation)
+  • first_order: False (utiliser full MAML)
+
+Training Configuration:
+  • num_epochs: 150 (max epochs, avec early stopping)
+  • early_stopping_patience: 15 epochs
+  • early_stopping_min_delta: 0.001
+
+Hardware:
+  • Device: CPU (pas de GPU utilisé)
+  • num_workers: 0
+
+═══════════════════════════════════════════════════════════════════════════════════
+
+6. PROCESSUS D'ENTRAÎNEMENT
+══��═════════════════════════
+
+6.1 BOUCLE PRINCIPALE
+──────────────────────
+
+PHASE 1: TRAINING (100 batches par epoch)
+  
+  Pour chaque batch (contenant 2 tâches MAML):
+    
+    TÂCHE 1 (ex: Lettuce):
+    ├─ Support Set: 5 healthy + 5 diseased = 10 images
+    │  └─ Forward pass → Logits
+    │  └─ Calculer loss
+    │  └─ GRADIENT DESCENT: θ' = θ - 0.01×∇Loss
+    │
+    ├─ Query Set: 10 healthy + 10 diseased = 20 images
+    │  └─ Forward pass avec θ' (poids adaptés)
+    │  └─ Calculer loss query
+    │  └─ Calculer accuracy query
+    │
+    └─ META-UPDATE:
+       └─ Loss query.backward()
+       └─ Optimizer.step() (θ = θ - 0.001×∇Loss_query)
+    
+    TÂCHE 2: (même processus)
+
+PHASE 2: VALIDATION (100 batches)
+  
+  Même processus mais:
+    • Pas de meta-update
+    • torch.no_grad() sur query loss
+    • Juste évaluation
+    • Enregistrer val_loss et val_acc
+
+6.2 MÉTRIQUES SUIVIES
+──────────────────────
+
+LOSS (Cross-Entropy):
+  Loss = -log(P(correct_class))
+  • Calculée sur le query set
+  • Moyenne sur 20 images (10 per class)
+  • Objectif: Minimiser
+
+ACCURACY:
+  Accuracy = (Correct predictions) / Total
+  • Calculée sur le query set
+  • Objectif: Maximiser
+
+6.3 EARLY STOPPING
+───────────────────
+
+Patience Mechanism:
+  • patience = 15 epochs
+  • min_delta = 0.001 (amélioration minimale)
+  
+  Counter Logic:
+    Si Val Loss s'améliore: counter = 0 (RESET)
+    Si Val Loss n'améliore pas: counter += 1
+    Si counter >= patience: ARRÊTER entraînement
+
+═══════════════════════════════════════════════════════════════════════════════════
+
+7. AMÉLIORATIONS APPORTÉES AU PROJET
+═════════════════════════════════════
+
+7.1 MODIFICATION 1: GlobalAvgPool au lieu de Flatten
+─────────────────────────────────────────────────────
+  ❌ AVANT:
+     - Flatten: 5×5×64 = 1600 features
+     - Risque d'overfitting
+  
+  ✅ APRÈS:
+     - GlobalAvgPool: 64 features
+     - Moins de poids
+     - Meilleure généralisation
+
+7.2 MODIFICATION 2: Affichage Accuracy à chaque Epoch
+──────────────────────────────────────────────────────
+  ❌ AVANT:
+     - Seulement loss affiché
+     - Difficile de suivre généralisation
+  
+  ✅ APRÈS:
+     - Train Loss + Accuracy
+     - Val Loss + Accuracy
+     - Détection overfitting facile
+
+7.3 MODIFICATION 3: Early Stopping avec Patience
+────────────────────────────────────────────────
+  ❌ AVANT:
+     - Pas d'arrêt automatique
+     - Overfitting continuait
+  
+  ✅ APRÈS:
+     - Arrête après 15 epochs sans amélioration
+     - Économise temps de calcul
+     - Protège contre overfitting
+
+7.4 MODIFICATION 4: Sauvegarde Checkpoints
+──────────────────────────────────────────
+  ✅ Sauvegarde tous les 10 epochs
+  ✅ Sauvegarde du meilleur modèle
+  ✅ config.json pour reproductibilité
+
+═══════════════════════════════════════════════════════════════════════════════════
+
+8. CONCLUSION MÉTHODOLOGIE
+════════════════════════════
+
+APPROCHE UTILISÉE:
+  1. MAML (Model-Agnostic Meta-Learning)
+  2. Conv4 architecture (adaptée de MiniImagenet)
+  3. GlobalAvgPool (réduction overfitting)
+  4. Early stopping (protection contre overfitting)
+
+POINTS CLÉS:
+  ✓ Few-shot learning (5-shot)
+  ✓ Meta-learning paradigm
+  ✓ Adaptation rapide
+  ✓ Généralisable à nouvelles espèces
+
+PROCHAINES ÉTAPES:
+  • Voir Rapport 2 pour interprétation des résultats
+  • Analyser overfitting détecté
+  • Proposer améliorations
+
+═══════════════════════════════════════════════════════════════════════════════════
+
+""".format(date=datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+
+# Sauvegarder le rapport
+with open('RAPPORT_1_METHODOLOGIE.txt', 'w', encoding='utf-8') as f:
+    f.write(report)
+
+print(report)
+print("\n✅ Rapport sauvegardé: RAPPORT_1_METHODOLOGIE.txt")

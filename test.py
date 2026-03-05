@@ -6,6 +6,27 @@ from torchmeta.utils import gradient_update_parameters
 
 from maml.datasets import get_benchmark_by_name
 from maml.metalearners import ModelAgnosticMetaLearning
+# ===== AJOUTER CES IMPORTS =====
+import random
+import numpy as np
+# ===== FIN IMPORTS =====
+
+# ===== SET RANDOM SEEDS FOR REPRODUCIBILITY =====
+SEED = 42
+
+torch.manual_seed(SEED)
+np.random.seed(SEED)
+random.seed(SEED)
+
+if torch.cuda.is_available():
+    torch.cuda.manual_seed(SEED)
+    torch.cuda.manual_seed_all(SEED)
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
+
+print(f"\n🌱 Random seed set to {SEED} for reproducibility\n")
+# ===== END RANDOM SEEDS =====
+
 
 def main(args):
     # ===== CHARGER LA CONFIGURATION =====
