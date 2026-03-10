@@ -8,9 +8,12 @@ import torch
 from torch.utils.data import Dataset
 from torchvision.transforms import Compose, Resize, ToTensor, Normalize
 
-from torchmeta.datasets import Omniglot, MiniImagenet
-from torchmeta.toy import Sinusoid
-from torchmeta.transforms import ClassSplitter, Categorical, Rotation
+#from torchmeta.datasets import Omniglot, MiniImagenet
+#from torchmeta.toy import Sinusoid
+#from torchmeta.transforms import ClassSplitter, Categorical, Rotation
+from torchmeta_compat.datasets import Omniglot, MiniImagenet
+from torchmeta_compat.toy import Sinusoid
+from torchmeta_compat.transforms import ClassSplitter, Categorical, Rotation
 
 from maml.model import ModelConvOmniglot, ModelConvMiniImagenet, ModelMLPSinusoid
 from maml.utils import ToTensor1D

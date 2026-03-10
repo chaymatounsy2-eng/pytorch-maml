@@ -7,13 +7,16 @@ import logging
 import random          # ← AJOUTER
 import numpy as np
 
-from torchmeta.utils.data import BatchMetaDataLoader
+#from torchmeta.utils.data import BatchMetaDataLoader
+
 from torch.utils.data import DataLoader
-from torchmeta.utils import gradient_update_parameters
+#from torchmeta.utils import gradient_update_parameters
 
 from maml.datasets import get_benchmark_by_name
 from maml.metalearners import ModelAgnosticMetaLearning
 
+from torchmeta_compat import BatchMetaDataLoader
+from torchmeta_compat import gradient_update_parameters
 # ===== SET RANDOM SEEDS FOR REPRODUCIBILITY =====  ← ICI!
 SEED = 42
 
@@ -116,6 +119,7 @@ def main(args):
                                       args.num_shots,
                                       args.num_shots_test,
                                       hidden_size=args.hidden_size)
+    benchmark.model.to(device)                                  
     print("✅ Benchmark loaded!\n")
 
     # =====================================================================
